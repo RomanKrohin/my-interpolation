@@ -1,0 +1,15 @@
+.clj-kondo/
+.lsp/
+/interpolation/target
+/interpolation/classes
+/interpolation/checkouts
+interpolation/profiles.clj
+interpolation/pom.xml
+interpolation/pom.xml.asc
+interpolation/*.jar
+interpolation/*.class
+/interpolation/.lein-*
+/interpolation/.nrepl-port
+/interpolation/.prepl-port
+interpolation/.hgignore
+interpolation/.hg/
