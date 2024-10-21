@@ -40,11 +40,6 @@ jobs:
         chmod +x install-clj-kondo
         sudo ./install-clj-kondo
 
-    - name: Install cljfmt
-      run: |
-        curl -sLO https://raw.githubusercontent.com/weavejester/cljfmt/master/script/install-cljfmt
-        chmod +x install-cljfmt
-        sudo ./install-cljfmt
 
     - name: Run tests
       run: cd interpolation && lein test
