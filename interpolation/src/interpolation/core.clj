@@ -5,10 +5,12 @@
 
 (def cli-options
   [["-s" "--step STEP" "Шаг интерполяции" :parse-fn #(Double/parseDouble %)]
+   ["-a" "--algorithm ALGORITHM" "Алгоритм интерполяции (linear, lagrange, both)"
+    :validate [#{"linear" "lagrange" "both"} "Должен быть 'linear', 'lagrange' или 'both'"]]
    ["-h" "--help"]])
 
 (defn parse-line [line]
-  (let [[x y] (str/split line #"\s+")]
+  (let [[x y] (str/split line #"[;\t\s]+")] ;; Добавлена поддержка разных разделителей
     [(Double/parseDouble x) (Double/parseDouble y)]))
 
 (defn linear-interpolation [points step]
@@ -37,6 +39,14 @@
      0
      (range n))))
 
+(defn center-window [points window-size]
+  (let [half-window-size (quot window-size 2)]
+    (if (> (count points) window-size)
+      (let [middle-index (quot (count points) 2)]
+        (subvec points (- middle-index half-window-size) (+ middle-index half-window-size)))
+      points)))
+
+
 (defn lagrange-interpolation [points step start-x end-x]
   (let [x-values (range start-x (+ end-x step) step)]
     (map (fn [x] [x (lagrange-polynomial points x)]) x-values)))
@@ -46,16 +56,24 @@
         y-str (str/join "\t" (map #(format "%.2f" %) y-values))]
     (str x-str "\n" y-str)))
 
-(defn process-input [step]
-  (let [window (atom [])]
+
+(defn process-input [step algorithm]
+  (let [window (atom [])
+        window-size 5] ;; Размер окна для Лагранжа (например, 5 точек)
     (while true
       (let [line (read-line)]
         (when (not (empty? line))
           (let [point (parse-line line)]
             (swap! window conj point)
 
-            ;; Линейная интерполяция: выполняется после каждых 2 точек
-            (when (>= (count @window) 2)
+            ;; Проверка сортировки по X
+            (when (not (apply <= (map first @window)))
+              (println "Данные не отсортированы по X. Производится сортировка.")
+              (swap! window sort-by first))
+
+            ;; Линейная интерполяция
+            (when (and (>= (count @window) 2)
+                       (or (= algorithm "linear") (= algorithm "both")))
               (let [window-points (take-last 2 @window)
                     interp (linear-interpolation window-points step)
                     x-values (map first interp)
@@ -64,12 +82,13 @@
                                  (first x-values) (last x-values)))
                 (println (format-output x-values y-values))))
 
-            ;; Лагранжевая интерполяция: выполняется после каждых 5 точек
-            (when (>= (count @window) 5)
-              (let [window-points (take-last 5 @window)
-                    start-x (first (map first window-points))
-                    end-x (last (map first window-points))
-                    interp (lagrange-interpolation window-points step start-x end-x)
+            ;; Лагранжевская интерполяция с центрированием
+            (when (and (>= (count @window) window-size)
+                       (or (= algorithm "lagrange") (= algorithm "both")))
+              (let [centered-window (center-window (take-last window-size @window) window-size)
+                    start-x (first (map first centered-window))
+                    end-x (last (map first centered-window))
+                    interp (lagrange-interpolation centered-window step start-x end-x)
                     x-values (map first interp)
                     y-values (map second interp)]
                 (println (format "Лагранжевская интерполяция (X от %.3f до %.3f):"
@@ -79,7 +98,9 @@
 (defn -main [& args]
   (let [{:keys [options]} (parse-opts args cli-options)]
     (if (:help options)
-      (println "Usage: lein run --step <step>")
-      (let [step (or (:step options) 1.0)]
+      (println "Usage: lein run --step <step> --algorithm <algorithm>")
+      (let [step (or (:step options) 1.0)
+            algorithm (or (:algorithm options) "both")]
         (println "Введите точки в формате: X Y")
-        (process-input step)))))
+        (process-input step algorithm)))))
+
