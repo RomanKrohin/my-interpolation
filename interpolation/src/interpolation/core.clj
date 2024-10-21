@@ -17,10 +17,10 @@
   (let [[p1 p2] points
         [x1 y1] p1
         [x2 y2] p2
-        x-values (range x1 x2 step)]
+        x-values (range x1 (+ step x2) step)]
     (map (fn [x]
            (let [t (/ (- x x1) (- x2 x1))]
-             [x (+ y1 (* t (- y2 y1)))]))
+             [(double x) (+ y1 (* t (- y2 y1)))]))
          x-values)))
 
 (defn lagrange-polynomial [points x]
@@ -40,9 +40,10 @@
      (range n))))
 
 (defn center-window [points window-size]
-  (let [half-window-size (quot window-size 2)]
-    (if (> (count points) window-size)
-      (let [middle-index (quot (count points) 2)]
+  (let [half-window-size (quot window-size 2)
+        count-points (count points)]
+    (if (> count-points window-size)
+      (let [middle-index (quot count-points 2)]
         (subvec points (- middle-index half-window-size) (+ middle-index half-window-size)))
       points)))
 
@@ -53,7 +54,7 @@
 (defn format-output [x-values y-values]
   (let [x-str (str/join "\t" (map #(format "%.2f" %) x-values))
         y-str (str/join "\t" (map #(format "%.2f" %) y-values))]
-    (str x-str "\n" y-str)))
+    (str x-str "\n" y-str "\n")))
 
 (defn process-input [step algorithm]
   (let [window (atom [])
@@ -65,18 +66,16 @@
           (do
             (println "EOF получен. Завершение работы.")
             (System/exit 0))
+          #_{:clj-kondo/ignore [:not-empty?]}
           (when (not (empty? line))
             (let [point (parse-line line)]
               (swap! window conj point)
 
-              ;; Сортировка данных по X
               (when (not (apply <= (map first @window)))
                 (println "Данные не отсортированы по X. Производится сортировка.")
                 (swap! window sort-by first))
 
-              ;; Обработка интерполяции
               (when (>= (count @window) 2)
-                ;; Линейная интерполяция
                 (when (or (= algorithm "linear") (= algorithm "both"))
                   (let [window-points (take-last 2 @window)
                         interp (linear-interpolation window-points step)
@@ -86,7 +85,6 @@
                                      (first x-values) (last x-values)))
                     (println (format-output x-values y-values))))
 
-                ;; Лагранжева интерполяция
                 (when (>= (count @window) window-size)
                   (reset! lagrange-ready true))
 
@@ -101,7 +99,6 @@
                                      start-x end-x))
                     (println (format-output x-values y-values)))
 
-                  ;; Сдвиг окна: удаление старой точки
                   (swap! window #(if (> (count %) window-size)
                                    (vec (rest %))
                                    %)))))))))))
