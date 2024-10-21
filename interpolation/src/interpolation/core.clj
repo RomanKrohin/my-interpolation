@@ -46,7 +46,6 @@
         (subvec points (- middle-index half-window-size) (+ middle-index half-window-size)))
       points)))
 
-
 (defn lagrange-interpolation [points step start-x end-x]
   (let [x-values (range start-x (+ end-x step) step)]
     (map (fn [x] [x (lagrange-polynomial points x)]) x-values)))
@@ -56,12 +55,10 @@
         y-str (str/join "\t" (map #(format "%.2f" %) y-values))]
     (str x-str "\n" y-str)))
 
-
 (defn process-input [step algorithm]
   (let [window (atom [])
         window-size 5
         lagrange-ready (atom false)]
-
     (while true
       (let [line (read-line)]
         (if (nil? line)
@@ -72,35 +69,42 @@
             (let [point (parse-line line)]
               (swap! window conj point)
 
+              ;; Сортировка данных по X
               (when (not (apply <= (map first @window)))
                 (println "Данные не отсортированы по X. Производится сортировка.")
                 (swap! window sort-by first))
 
-              (when (and (>= (count @window) 2)
-                         (or (= algorithm "linear") (= algorithm "both")))
-                (let [window-points (take-last 2 @window)
-                      interp (linear-interpolation window-points step)
-                      x-values (map first interp)
-                      y-values (map second interp)]
-                  (println (format "Линейная интерполяция (X от %.3f до %.3f):"
-                                   (first x-values) (last x-values)))
-                  (println (format-output x-values y-values))))
+              ;; Обработка интерполяции
+              (when (>= (count @window) 2)
+                ;; Линейная интерполяция
+                (when (or (= algorithm "linear") (= algorithm "both"))
+                  (let [window-points (take-last 2 @window)
+                        interp (linear-interpolation window-points step)
+                        x-values (map first interp)
+                        y-values (map second interp)]
+                    (println (format "Линейная интерполяция (X от %.3f до %.3f):"
+                                     (first x-values) (last x-values)))
+                    (println (format-output x-values y-values))))
 
-              (when (and (>= (count @window) window-size)
-                         (or (= algorithm "lagrange") (= algorithm "both")))
-                (reset! lagrange-ready true))
+                ;; Лагранжева интерполяция
+                (when (>= (count @window) window-size)
+                  (reset! lagrange-ready true))
 
-              (when @lagrange-ready
-                (let [centered-window (center-window (take-last window-size @window) window-size)
-                      start-x (first (map first centered-window))
-                      end-x (last (map first centered-window))
-                      interp (lagrange-interpolation centered-window step start-x end-x)
-                      x-values (map first interp)
-                      y-values (map second interp)]
-                  (println (format "Лагранжевская интерполяция (X от %.3f до %.3f):"
-                                   start-x end-x))
-                  (println (format-output x-values y-values)))))))))))
+                (when @lagrange-ready
+                  (let [centered-window (center-window (take-last window-size @window) window-size)
+                        start-x (first (map first centered-window))
+                        end-x (last (map first centered-window))
+                        interp (lagrange-interpolation centered-window step start-x end-x)
+                        x-values (map first interp)
+                        y-values (map second interp)]
+                    (println (format "Лагранжевская интерполяция (X от %.3f до %.3f):"
+                                     start-x end-x))
+                    (println (format-output x-values y-values)))
 
+                  ;; Сдвиг окна: удаление старой точки
+                  (swap! window #(if (> (count %) window-size)
+                                   (vec (rest %))
+                                   %)))))))))))
 
 (defn -main [& args]
   (let [{:keys [options]} (parse-opts args cli-options)]
@@ -110,4 +114,3 @@
             algorithm (or (:algorithm options) "both")]
         (println "Введите точки в формате: X Y")
         (process-input step algorithm)))))
-
