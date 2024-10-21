@@ -10,14 +10,14 @@
    ["-h" "--help"]])
 
 (defn parse-line [line]
-  (let [[x y] (str/split line #"[;\t\s]+")] ;; Добавлена поддержка разных разделителей
+  (let [[x y] (str/split line #"[;\t\s]+")]
     [(Double/parseDouble x) (Double/parseDouble y)]))
 
 (defn linear-interpolation [points step]
   (let [[p1 p2] points
         [x1 y1] p1
         [x2 y2] p2
-        x-values (range x1 (+ x2 step) step)]
+        x-values (range x1 x2 step)]
     (map (fn [x]
            (let [t (/ (- x x1) (- x2 x1))]
              [x (+ y1 (* t (- y2 y1)))]))
@@ -59,41 +59,48 @@
 
 (defn process-input [step algorithm]
   (let [window (atom [])
-        window-size 5] ;; Размер окна для Лагранжа (например, 5 точек)
+        window-size 5
+        lagrange-ready (atom false)]
+
     (while true
       (let [line (read-line)]
-        (when (not (empty? line))
-          (let [point (parse-line line)]
-            (swap! window conj point)
+        (if (nil? line)
+          (do
+            (println "EOF получен. Завершение работы.")
+            (System/exit 0))
+          (when (not (empty? line))
+            (let [point (parse-line line)]
+              (swap! window conj point)
 
-            ;; Проверка сортировки по X
-            (when (not (apply <= (map first @window)))
-              (println "Данные не отсортированы по X. Производится сортировка.")
-              (swap! window sort-by first))
+              (when (not (apply <= (map first @window)))
+                (println "Данные не отсортированы по X. Производится сортировка.")
+                (swap! window sort-by first))
 
-            ;; Линейная интерполяция
-            (when (and (>= (count @window) 2)
-                       (or (= algorithm "linear") (= algorithm "both")))
-              (let [window-points (take-last 2 @window)
-                    interp (linear-interpolation window-points step)
-                    x-values (map first interp)
-                    y-values (map second interp)]
-                (println (format "Линейная интерполяция (X от %.3f до %.3f):"
-                                 (first x-values) (last x-values)))
-                (println (format-output x-values y-values))))
+              (when (and (>= (count @window) 2)
+                         (or (= algorithm "linear") (= algorithm "both")))
+                (let [window-points (take-last 2 @window)
+                      interp (linear-interpolation window-points step)
+                      x-values (map first interp)
+                      y-values (map second interp)]
+                  (println (format "Линейная интерполяция (X от %.3f до %.3f):"
+                                   (first x-values) (last x-values)))
+                  (println (format-output x-values y-values))))
 
-            ;; Лагранжевская интерполяция с центрированием
-            (when (and (>= (count @window) window-size)
-                       (or (= algorithm "lagrange") (= algorithm "both")))
-              (let [centered-window (center-window (take-last window-size @window) window-size)
-                    start-x (first (map first centered-window))
-                    end-x (last (map first centered-window))
-                    interp (lagrange-interpolation centered-window step start-x end-x)
-                    x-values (map first interp)
-                    y-values (map second interp)]
-                (println (format "Лагранжевская интерполяция (X от %.3f до %.3f):"
-                                 start-x end-x))
-                (println (format-output x-values y-values))))))))))
+              (when (and (>= (count @window) window-size)
+                         (or (= algorithm "lagrange") (= algorithm "both")))
+                (reset! lagrange-ready true))
+
+              (when @lagrange-ready
+                (let [centered-window (center-window (take-last window-size @window) window-size)
+                      start-x (first (map first centered-window))
+                      end-x (last (map first centered-window))
+                      interp (lagrange-interpolation centered-window step start-x end-x)
+                      x-values (map first interp)
+                      y-values (map second interp)]
+                  (println (format "Лагранжевская интерполяция (X от %.3f до %.3f):"
+                                   start-x end-x))
+                  (println (format-output x-values y-values)))))))))))
+
 
 (defn -main [& args]
   (let [{:keys [options]} (parse-opts args cli-options)]
