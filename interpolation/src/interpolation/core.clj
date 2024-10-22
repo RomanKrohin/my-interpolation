@@ -39,14 +39,6 @@
      0
      (range n))))
 
-(defn center-window [points window-size]
-  (let [half-window-size (quot window-size 2)
-        count-points (count points)]
-    (if (> count-points window-size)
-      (let [middle-index (quot count-points 2)]
-        (subvec points (- middle-index half-window-size) (+ middle-index half-window-size)))
-      points)))
-
 (defn lagrange-interpolation [points step start-x end-x]
   (let [x-values (range start-x (+ end-x step) step)]
     (map (fn [x] [x (lagrange-polynomial points x)]) x-values)))
@@ -57,51 +49,46 @@
     (str x-str "\n" y-str "\n")))
 
 (defn process-input [step algorithm]
-  (let [window (atom [])
-        window-size 5
-        lagrange-ready (atom false)]
-    (while true
+  (let [window-size 5]
+    (loop [points []]
       (let [line (read-line)]
         (if (nil? line)
           (do
             (println "EOF получен. Завершение работы.")
             (System/exit 0))
           #_{:clj-kondo/ignore [:not-empty?]}
-          (when (not (empty? line))
-            (let [point (parse-line line)]
-              (swap! window conj point)
+          (if (not (empty? line))
+            (let [point (parse-line line)
+                  updated-points (conj points point)
+                  sorted-points (if (not (apply <= (map first updated-points)))
+                                  (do
+                                    (println "Данные не отсортированы по X. Производится сортировка.")
+                                    (sort-by first updated-points))
+                                  updated-points)]
 
-              (when (not (apply <= (map first @window)))
-                (println "Данные не отсортированы по X. Производится сортировка.")
-                (swap! window sort-by first))
-
-              (when (>= (count @window) 2)
+              (when (>= (count sorted-points) 2)
                 (when (or (= algorithm "linear") (= algorithm "both"))
-                  (let [window-points (take-last 2 @window)
+                  (let [window-points (take-last 2 sorted-points)
                         interp (linear-interpolation window-points step)
                         x-values (map first interp)
                         y-values (map second interp)]
                     (println (format "Линейная интерполяция (X от %.3f до %.3f):"
                                      (first x-values) (last x-values)))
-                    (println (format-output x-values y-values))))
+                    (println (format-output x-values y-values)))))
 
-                (when (>= (count @window) window-size)
-                  (reset! lagrange-ready true))
-
-                (when @lagrange-ready
-                  (let [centered-window (center-window (take-last window-size @window) window-size)
-                        start-x (first (map first centered-window))
-                        end-x (last (map first centered-window))
-                        interp (lagrange-interpolation centered-window step start-x end-x)
+              (let [lagrange-windows (partition window-size 1 sorted-points)]
+                (doseq [window lagrange-windows]
+                  (let [start-x (first (map first window))
+                        end-x (last (map first window))
+                        interp (lagrange-interpolation window step start-x end-x)
                         x-values (map first interp)
                         y-values (map second interp)]
                     (println (format "Лагранжевская интерполяция (X от %.3f до %.3f):"
                                      start-x end-x))
-                    (println (format-output x-values y-values)))
+                    (println (format-output x-values y-values)))))
 
-                  (swap! window #(if (> (count %) window-size)
-                                   (vec (rest %))
-                                   %)))))))))))
+              (recur sorted-points))
+            (recur points)))))))
 
 (defn -main [& args]
   (let [{:keys [options]} (parse-opts args cli-options)]
